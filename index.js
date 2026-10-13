@@ -4,15 +4,15 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// 👇👇 شيل الكلمات وحط الأرقام (IDs) الخاصة بسيرفرك هنا 👇👇
+// 👇👇 ضع أرقام الـ IDs الخاصة بسيرفرك هنا بالملي 👇👇
 const CONFIG = {
-    CATEGORY_ID:  '1559308775653900429', 
+    CATEGORY_ID: '1559308775653900429', 
     STAFF_ROLE_ID: '1559309508688216115',
     LOG_CHANNEL_ID: '1559308944927883294'
 };
 
 client.once('ready', () => {
-    console.log(`✅ البوت شغال الآن باسم: ${client.user.tag}`);
+    console.log(`✅ البوت شغال بدون تعليق باسم: ${client.user.tag}`);
 });
 
 // الأوامر الكتابية
@@ -77,43 +77,54 @@ client.on('messageCreate', async (message) => {
 // الأزرار والتفاعلات
 client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
+        
+        // عند فتح التذكرة
         if (interaction.customId.startsWith('ticket_')) {
-            await interaction.deferReply({ ephemeral: true });
+            // الرد الفوري المخفي عشان نشيل كلمة thinking ونمنع التعليق
+            await interaction.reply({ content: '⏳ جاري إنشاء تذكرتك، يرجى الانتظار ثواني...', ephemeral: true });
+
             let typeLabel = 'عام';
             if (interaction.customId === 'ticket_tech') typeLabel = 'تقني';
             if (interaction.customId === 'ticket_buy') typeLabel = 'شحن';
 
-            const ticketChannel = await interaction.guild.channels.create({
-                name: `ticket-${typeLabel}-${interaction.user.username}`,
-                type: ChannelType.GuildText,
-                parent: CONFIG.CATEGORY_ID,
-                permissionOverwrites: [
-                    { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] }, 
-                    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] }, 
-                    { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] } 
-                ]
-            });
+            try {
+                const ticketChannel = await interaction.guild.channels.create({
+                    name: `ticket-${typeLabel}-${interaction.user.username}`,
+                    type: ChannelType.GuildText,
+                    parent: CONFIG.CATEGORY_ID,
+                    permissionOverwrites: [
+                        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] }, 
+                        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] }, 
+                        { id: CONFIG.STAFF_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] } 
+                    ]
+                });
 
-            const embed = new EmbedBuilder()
-                .setTitle(`🎯 تذكرة ${typeLabel}`)
-                .setDescription(`مرحباً بك ${interaction.user}.\nاستخدم الأزرار بالأسفل أو اكتب الأوامر للتحكم بالتذكرة.\n\n**📜 الأوامر:**\n\`!close\` | \`!rename\` | \`!add\` | \`!staff\` | \`!user\``)
-                .setColor('#248046');
+                const embed = new EmbedBuilder()
+                    .setTitle(`🎯 تذكرة ${typeLabel}`)
+                    .setDescription(`مرحباً بك ${interaction.user}.\nاستخدم الأزرار بالأسفل أو اكتب الأوامر للتحكم بالتذكرة.\n\n**📜 الأوامر المتاحة داخل الروم:**\n\`!close\` | \`!rename\` | \`!add\` | \`!staff\` | \`!user\``)
+                    .setColor('#248046');
 
-            const row1 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('close_ticket_btn').setLabel('إغلاق').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
-                new ButtonBuilder().setCustomId('claim_ticket_btn').setLabel('استلام').setStyle(ButtonStyle.Secondary).setEmoji('🙋‍♂️')
-            );
+                const row1 = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('close_ticket_btn').setLabel('إغلاق').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
+                    new ButtonBuilder().setCustomId('claim_ticket_btn').setLabel('استلام').setStyle(ButtonStyle.Secondary).setEmoji('🙋‍♂️')
+                );
 
-            const row2 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('rename_ticket_btn').setLabel('اسم الروم').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
-                new ButtonBuilder().setCustomId('add_user_btn').setLabel('عضو').setStyle(ButtonStyle.Primary).setEmoji('➕'),
-                new ButtonBuilder().setCustomId('call_staff_btn').setLabel('نداء الإدارة').setStyle(ButtonStyle.Success).setEmoji('🚨'),
-                new ButtonBuilder().setCustomId('call_user_btn').setLabel('تنبيه العضو').setStyle(ButtonStyle.Warning).setEmoji('🔔')
-            );
+                const row2 = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('rename_ticket_btn').setLabel('اسم الروم').setStyle(ButtonStyle.Primary).setEmoji('✏️'),
+                    new ButtonBuilder().setCustomId('add_user_btn').setLabel('عضو').setStyle(ButtonStyle.Primary).setEmoji('➕'),
+                    new ButtonBuilder().setCustomId('call_staff_btn').setLabel('نداء الإدارة').setStyle(ButtonStyle.Success).setEmoji('🚨'),
+                    new ButtonBuilder().setCustomId('call_user_btn').setLabel('تنبيه العضو').setStyle(ButtonStyle.Warning).setEmoji('🔔')
+                );
 
-            await ticketChannel.setTopic(interaction.user.id);
-            await ticketChannel.send({ embeds: [embed], components: [row1, row2] });
-            await interaction.editReply({ content: `تم فتح تذكرتك هنا: ${ticketChannel}`, ephemeral: true });
+                await ticketChannel.setTopic(interaction.user.id);
+                await ticketChannel.send({ embeds: [embed], components: [row1, row2] });
+                
+                // تحديث الرد الأصلي ليخبر العضو بنجاح العملية
+                return await interaction.editReply({ content: `✅ تم فتح تذكرتك بنجاح هنا: ${ticketChannel}` });
+            } catch (err) {
+                console.log(err);
+                return await interaction.editReply({ content: '❌ حدث خطأ أثناء إنشاء الغرفة، تأكد من صلاحيات البوت والـ IDs.' });
+            }
         }
 
         if (interaction.customId === 'close_ticket_btn') {
@@ -165,20 +176,19 @@ client.on('interactionCreate', async (interaction) => {
             try {
                 const member = await interaction.guild.members.fetch(userId);
                 await interaction.channel.permissionOverwrites.edit(member, { ViewChannel: true, SendMessages: true, AttachFiles: true });
-                await interaction.reply({ content: `➕ تم إضافة العضو ${member} بنجاح.` });
+                await interaction.reply({ content: ➕ تم إضافة العضو ${member} بنجاح. });
             } catch (error) {
-                await interaction.reply({ content: '❌ الـ ID غير صحيح.', ephemeral: true });
+            await interaction.reply({ content: '❌ الـ ID غير صحيح.', ephemeral: true });
             }
-        }
-    }
-});
-
-async function handleTicketClose(channel, user) {
-    const logChannel = channel.guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
-    if (logChannel) {
-        const logEmbed = new EmbedBuilder().setTitle('🔒 تذكرة مغلقة').setDescription(`**الروم:** ${channel.name}\n**أغلقها:** ${user}`).setColor('#DA373C').setTimestamp();
-        await logChannel.send({ embeds: [logEmbed] });
-    }
-    setTimeout(async () => { try { await channel.delete(); } catch (err) { console.log(err); } }, 5000);
-}
-client.login(process.env.TOKEN);
+            }
+            }
+            });
+            async function handleTicketClose(channel, user) {
+            const logChannel = channel.guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
+            if (logChannel) {
+            const logEmbed = new EmbedBuilder().setTitle('🔒 تذكرة مغلقة').setDescription(**الروم:** ${channel.name}\n**أغلقها:** ${user}).setColor('#DA373C').setTimestamp();
+            await logChannel.send({ embeds: [logEmbed] });
+            }
+            setTimeout(async () => { try { await channel.delete(); } catch (err) { console.log(err); } }, 5000);
+            }
+            client.login(process.env.TOKEN);
