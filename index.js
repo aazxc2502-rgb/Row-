@@ -20,7 +20,7 @@ client.once('ready', () => {
     console.log(`✅ البوت شغال الآن باسم: ${client.user.tag}`);
 });
 
-// ========== أمر إنشاء لوحة التذاكر ==========
+// ========== أمر إنشاء لوحة التذاكر + أوامر التذكرة ==========
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
@@ -46,7 +46,7 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // ========== أوامر داخل التذكرة ==========
+    // ========== أوامر داخل التذكرة فقط ==========
     if (!message.channel.name.startsWith('ticket-') && !message.channel.name.startsWith('🔒')) return;
 
     const isStaff = message.member.roles.cache.has(CONFIG.STAFF_ROLE_ID) || message.member.permissions.has(PermissionFlagsBits.Administrator);
@@ -90,12 +90,9 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!lock') {
         if (!isStaff) return message.reply('❌ هذا الأمر للإدارة فقط.');
 
-        // قفل الكتابة عن الجميع ما عدا الإدارة
         await message.channel.permissionOverwrites.edit(message.guild.id, {
             SendMessages: false
         });
-
-        // السماح للإدارة
         await message.channel.permissionOverwrites.edit(CONFIG.STAFF_ROLE_ID, {
             SendMessages: true,
             ViewChannel: true
@@ -113,13 +110,12 @@ client.on('messageCreate', async (message) => {
         if (!isStaff) return message.reply('❌ هذا الأمر للإدارة فقط.');
 
         await message.channel.permissionOverwrites.edit(message.guild.id, {
-            SendMessages: null // يرجع الإعداد الافتراضي
+            SendMessages: null
         });
 
-        // السماح لصاحب التذكرة والناس المضافين يكتبون
         const overwrites = message.channel.permissionOverwrites.cache;
         for (const [id, overwrite] of overwrites) {
-            if (overwrite.type === 1 && id !== CONFIG.STAFF_ROLE_ID) { // عضو
+            if (overwrite.type === 1 && id !== CONFIG.STAFF_ROLE_ID) {
                 await message.channel.permissionOverwrites.edit(id, {
                     SendMessages: true
                 });
@@ -138,21 +134,34 @@ client.on('messageCreate', async (message) => {
         return message.channel.send(`📢 <@&${CONFIG.STAFF_ROLE_ID}> تم استدعاؤكم إلى هذه التذكرة بواسطة ${message.author}`);
     }
 
-    // !user (استدعاء صاحب التذكرة)
+    // !user (استدعاء صاحب التذكرة برسالة خاصة)
     if (message.content === '!user') {
         if (!isStaff) return message.reply('❌ هذا الأمر للإدارة فقط.');
 
-        // نبحث عن صاحب التذكرة من الصلاحيات
         const ownerOverwrite = message.channel.permissionOverwrites.cache.find(ow => {
-            return ow.type === 1 && // عضو
+            return ow.type === 1 &&
                    ow.id !== message.guild.id &&
                    ow.allow.has(PermissionFlagsBits.ViewChannel);
         });
 
-        if (ownerOverwrite) {
-            return message.channel.send(`📢 <@${ownerOverwrite.id}> تم استدعاؤك إلى التذكرة بواسطة الإدارة.`);
-        } else {
+        if (!ownerOverwrite) {
             return message.reply('❌ ما قدرت ألقى صاحب التذكرة.');
+        }
+
+        try {
+            const owner = await message.guild.members.fetch(ownerOverwrite.id);
+            await owner.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle('📢 تم استدعاؤك')
+                        .setDescription(`تم استدعاؤك إلى تذكرتك في سيرفر **${message.guild.name}**\n\nالروم: ${message.channel}\nبواسطة: ${message.author}`)
+                        .setColor('#5865F2')
+                        .setTimestamp()
+                ]
+            });
+            return message.reply(`✅ تم إرسال رسالة خاصة إلى <@${ownerOverwrite.id}>`);
+        } catch (err) {
+            return message.reply(`❌ ما قدرت أرسل رسالة خاصة للعضو (غالباً مسكر الخاص).`);
         }
     }
 });
@@ -164,7 +173,6 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton() && interaction.customId === 'open_ticket') {
         await interaction.deferReply({ ephemeral: true });
 
-        // منع فتح أكثر من تذكرة
         const existing = interaction.guild.channels.cache.find(c =>
             c.name === `ticket-${interaction.user.username.toLowerCase()}` ||
             c.name === `🔒ticket-${interaction.user.username.toLowerCase()}`
@@ -190,7 +198,6 @@ client.on('interactionCreate', async (interaction) => {
             .setColor('#248046')
             .setFooter({ text: `صاحب التذكرة: ${interaction.user.tag}` });
 
-        // صف الأزرار الأول
         const row1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('add_member')
@@ -209,7 +216,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setEmoji('👤')
         );
 
-        // صف الأزرار الثاني
         const row2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('rename_ticket')
@@ -257,7 +263,7 @@ client.on('interactionCreate', async (interaction) => {
         return;
     }
 
-    // ----- زر استدعاء العضو -----
+    // ----- زر استدعاء العضو (يرسل رسالة خاصة) -----
     if (interaction.isButton() && interaction.customId === 'call_user') {
         const isStaff = interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
         if (!isStaff) return interaction.reply({ content: '❌ هذا الزر للإدارة فقط.', ephemeral: true });
@@ -268,12 +274,24 @@ client.on('interactionCreate', async (interaction) => {
                    ow.allow.has(PermissionFlagsBits.ViewChannel);
         });
 
-        if (ownerOverwrite) {
-            await interaction.reply({
-                content: `📢 <@${ownerOverwrite.id}> تم استدعاؤك إلى التذكرة بواسطة الإدارة.`
+        if (!ownerOverwrite) {
+            return interaction.reply({ content: '❌ ما قدرت ألقى صاحب التذكرة.', ephemeral: true });
+        }
+
+        try {
+            const owner = await interaction.guild.members.fetch(ownerOverwrite.id);
+            await owner.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle('📢 تم استدعاؤك')
+                        .setDescription(`تم استدعاؤك إلى تذكرتك في سيرفر **${interaction.guild.name}**\n\nالروم: ${interaction.channel}\nبواسطة: ${interaction.user}`)
+                        .setColor('#5865F2')
+                        .setTimestamp()
+                ]
             });
-        } else {
-            await interaction.reply({ content: '❌ ما قدرت ألقى صاحب التذكرة.', ephemeral: true });
+            await interaction.reply({ content: `✅ تم إرسال رسالة خاصة إلى <@${ownerOverwrite.id}>` });
+        } catch (err) {
+            await interaction.reply({ content: '❌ ما قدرت أرسل رسالة خاصة للعضو (غالباً مسكر الخاص).', ephemeral: true });
         }
         return;
     }
