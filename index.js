@@ -11,9 +11,9 @@ const client = new Client({
 
 // 👇👇 تعديل الأرقام هنا 👇👇
 const CONFIG = {
-    CATEGORY_ID: '1559308775653900429',
-    STAFF_ROLE_ID: '1559309508688216115',
-    LOG_CHANNEL_ID: '1559308944927883294'
+    CATEGORY_ID: '1546827284873478185',
+    STAFF_ROLE_ID: '1559602835715268719',
+    LOG_CHANNEL_ID: '1559602463290560654'
 };
 
 client.once('ready', () => {
@@ -89,44 +89,15 @@ client.on('messageCreate', async (message) => {
     // !lock
     if (message.content === '!lock') {
         if (!isStaff) return message.reply('❌ هذا الأمر للإدارة فقط.');
-
-        await message.channel.permissionOverwrites.edit(message.guild.id, {
-            SendMessages: false
-        });
-        await message.channel.permissionOverwrites.edit(CONFIG.STAFF_ROLE_ID, {
-            SendMessages: true,
-            ViewChannel: true
-        });
-
-        if (!message.channel.name.startsWith('🔒')) {
-            await message.channel.setName(`🔒${message.channel.name}`);
-        }
-
-        return message.reply('🔒 تم **قفل** التذكرة. فقط الإدارة تقدر تكتب الآن.');
+        await lockTicket(message.channel, message.member, message);
+        return;
     }
 
     // !unlock
     if (message.content === '!unlock') {
         if (!isStaff) return message.reply('❌ هذا الأمر للإدارة فقط.');
-
-        await message.channel.permissionOverwrites.edit(message.guild.id, {
-            SendMessages: null
-        });
-
-        const overwrites = message.channel.permissionOverwrites.cache;
-        for (const [id, overwrite] of overwrites) {
-            if (overwrite.type === 1 && id !== CONFIG.STAFF_ROLE_ID) {
-                await message.channel.permissionOverwrites.edit(id, {
-                    SendMessages: true
-                });
-            }
-        }
-
-        if (message.channel.name.startsWith('🔒')) {
-            await message.channel.setName(message.channel.name.replace('🔒', ''));
-        }
-
-        return message.reply('🔓 تم **فتح** التذكرة. الجميع يقدر يكتب الآن.');
+        await unlockTicket(message.channel, message);
+        return;
     }
 
     // !staff
@@ -165,6 +136,83 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
+
+// ========== دوال القفل والفتح ==========
+async function lockTicket(channel, member, interactionOrMessage) {
+    // منع الكتابة عن كل الأعضاء المضافين
+    const overwrites = channel.permissionOverwrites.cache;
+    for (const [id, overwrite] of overwrites) {
+        if (overwrite.type === 1) { // عضو
+            await channel.permissionOverwrites.edit(id, {
+                SendMessages: false
+            });
+        }
+    }
+
+    // الإدارة تقدر تكتب
+    await channel.permissionOverwrites.edit(CONFIG.STAFF_ROLE_ID, {
+        ViewChannel: true,
+        SendMessages: true,
+        ReadMessageHistory: true
+    });
+
+    // تغيير الاسم
+    if (!channel.name.startsWith('🔒')) {
+        await channel.setName(`🔒${channel.name}`);
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('🔒 تم قفل التذكرة')
+        .setDescription(`تم قفل التذكرة **${channel.name}**\nبواسطة: ${member}\n\nيمكنك فتحها مرة ثانية أو حذفها نهائياً.`)
+        .setColor('#FFA500')
+        .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('unlock_ticket')
+            .setLabel('فتح التذكرة')
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('🔓'),
+        new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('حذف التذكرة')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('🗑️')
+    );
+
+    if (interactionOrMessage.reply) {
+        // من أمر نصي
+        await interactionOrMessage.reply({ embeds: [embed], components: [row] });
+    } else {
+        // من زر
+        await interactionOrMessage.reply({ embeds: [embed], components: [row] });
+    }
+}
+
+async function unlockTicket(channel, interactionOrMessage) {
+    // السماح بالكتابة مرة ثانية لكل الأعضاء المضافين
+    const overwrites = channel.permissionOverwrites.cache;
+    for (const [id, overwrite] of overwrites) {
+        if (overwrite.type === 1) { // عضو
+            await channel.permissionOverwrites.edit(id, {
+                SendMessages: true
+            });
+        }
+    }
+
+    // إزالة 🔒 من الاسم
+    if (channel.name.startsWith('🔒')) {
+        await channel.setName(channel.name.replace('🔒', ''));
+    }
+
+    const content = '🔓 تم **فتح** التذكرة مرة ثانية. الجميع يقدر يكتب الآن.';
+
+    if (interactionOrMessage.reply) {
+        await interactionOrMessage.reply({ content });
+    } else {
+        await interactionOrMessage.reply({ content });
+    }
+}
 
 // ========== التعامل مع الأزرار والـ Modal ==========
 client.on('interactionCreate', async (interaction) => {
@@ -336,31 +384,28 @@ client.on('interactionCreate', async (interaction) => {
         const isStaff = interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
         if (!isStaff) return interaction.reply({ content: '❌ هذا الزر للإدارة فقط.', ephemeral: true });
 
-        await interaction.channel.permissionOverwrites.edit(interaction.guild.id, {
-            SendMessages: false
-        });
-        await interaction.channel.permissionOverwrites.edit(CONFIG.STAFF_ROLE_ID, {
-            SendMessages: true,
-            ViewChannel: true
-        });
-
-        if (!interaction.channel.name.startsWith('🔒')) {
-            await interaction.channel.setName(`🔒${interaction.channel.name}`);
-        }
-
-        await interaction.reply({ content: '🔒 تم **قفل** التذكرة. فقط الإدارة تقدر تكتب الآن.' });
+        await lockTicket(interaction.channel, interaction.member, interaction);
         return;
     }
 
-    // ----- زر إغلاق التذكرة -----
+    // ----- زر فتح التذكرة -----
+    if (interaction.isButton() && interaction.customId === 'unlock_ticket') {
+        const isStaff = interaction.member.roles.cache.has(CONFIG.STAFF_ROLE_ID) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+        if (!isStaff) return interaction.reply({ content: '❌ هذا الزر للإدارة فقط.', ephemeral: true });
+
+        await unlockTicket(interaction.channel, interaction);
+        return;
+    }
+
+    // ----- زر إغلاق / حذف التذكرة -----
     if (interaction.isButton() && interaction.customId === 'close_ticket') {
-        await interaction.reply({ content: '🗑️ سيتم إغلاق التذكرة وحذف الروم بعد **5 ثوانٍ**...' });
+        await interaction.reply({ content: '🗑️ سيتم حذف التذكرة نهائياً بعد **5 ثوانٍ**...' });
 
         const logChannel = interaction.guild.channels.cache.get(CONFIG.LOG_CHANNEL_ID);
         if (logChannel) {
             const logEmbed = new EmbedBuilder()
-                .setTitle('🔒 تذكرة مغلقة')
-                .setDescription(`تم إغلاق الروم: **${interaction.channel.name}**\nبواسطة: ${interaction.user}`)
+                .setTitle('🗑️ تذكرة محذوفة')
+                .setDescription(`تم حذف الروم: **${interaction.channel.name}**\nبواسطة: ${interaction.user}`)
                 .setColor('#DA373C')
                 .setTimestamp();
             await logChannel.send({ embeds: [logEmbed] });
