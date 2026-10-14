@@ -18,6 +18,24 @@ client.once('ready', () => {
     console.log(`✅ البوت شغال الآن باسم: ${client.user.tag}`);
 });
 
+// ===== إعطاء رتبة عضو عند الدخول =====
+client.on('guildMemberAdd', async (member) => {
+    try {
+        if (member.user.bot) return;
+
+        const role = member.guild.roles.cache.get(config.MEMBER_ROLE_ID);
+        if (!role) {
+            console.error('[AUTOROLE] رتبة العضو غير موجودة، تأكد من الآيدي');
+            return;
+        }
+
+        await member.roles.add(role);
+        console.log(`[AUTOROLE] تم إعطاء رتبة العضو لـ ${member.user.tag}`);
+    } catch (err) {
+        console.error('[AUTOROLE ERROR]', err);
+    }
+});
+
 // ===== الأوامر النصية =====
 client.on('messageCreate', async (message) => {
     try {
