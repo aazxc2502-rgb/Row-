@@ -344,14 +344,25 @@ if (interaction.isButton() && interaction.customId === 'close_ticket') {
 
     } catch (err) {
         console.error('[TRANSCRIPT ERROR]', err);
-        await interaction.followUp({ content: '❌ حصل خطأ أثناء إنشاء الـ transcript، لكن التذكرة راح تنحذف.', ephemeral: true }).catch(() => {});
-        
+        await interaction.followUp({ 
+            content: '❌ حصل خطأ أثناء إنشاء الـ transcript، لكن التذكرة راح تنحذف.', 
+            ephemeral: true 
+        }).catch(() => {});
+
         setTimeout(async () => {
-            try { await interaction.channel.delete(); } 
-            catch (e) { console.error(e); }
+            try { 
+                await interaction.channel.delete(); 
+            } catch (e) { 
+                console.error(e); 
+            }
         }, 2000);
     }
     return;
 }
 
-client.login(process.env.TOKEN)
+} catch (err) {
+    console.error('[INTERACTION ERROR]', err);
+}
+});
+
+client.login(process.env.TOKEN);
