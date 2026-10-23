@@ -1,6 +1,5 @@
 const { 
-    Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, 
-    ButtonStyle, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle 
+    ButtonStyle, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder
 } = require('discord.js');
 const config = require('./config');
 const ticket = require('./ticketSystem');
@@ -288,31 +287,71 @@ client.on('interactionCreate', async (interaction) => {
             return;
         }
 
-        // حذف
-        if (interaction.isButton() && interaction.customId === 'close_ticket') {
-            await interaction.reply({ content: '🗑️ سيتم حذف التذكرة نهائياً بعد **5 ثوانٍ**...' });
+     // حذف التذكرة + transcript
+if (interaction.isButton() && interaction.customId === 'close_ticket') {
+    await interaction.reply({ content: '🗑️ جاري إنشاء الـ transcript وحذف التذكرة...' });
 
-            const logChannel = interaction.guild.channels.cache.get(config.LOG_CHANNEL_ID);
-            if (logChannel) {
-                const logEmbed = new EmbedBuilder()
-                    .setTitle('🗑️ تذكرة محذوفة')
-                    .setDescription(`تم حذف الروم: **${interaction.channel.name}**\nبواسطة: ${interaction.user}`)
-                    .addFields({ name: '📅 وقت الحذف', value: `<t:${Math.floor(Date.now() / 1000)}:F>` })
-                    .setColor('#DA373C')
-                    .setTimestamp();
-                await logChannel.send({ embeds: [logEmbed] });
-            }
+    try {
+        // جلب الرسائل من التذكرة (آخر 100 رسالة)
+        const messages = await interaction.channel.messages.fetch({ limit: 100 });
+        const sorted = [...messages.values()].reverse(); // من الأقدم للأحدث
 
-            setTimeout(async () => {
-                try { await interaction.channel.delete(); } 
-                catch (err) { console.error('[DELETE ERROR]', err); }
-            }, 5000);
-            return;
+        let transcript = `===== TRANSCRIPT للتذكرة: ${interaction.channel.name} =====\n`;
+        transcript += `تاريخ الحذف: ${new Date().toLocaleString('ar-EG')}\n`;
+        transcript += `تم الحذف بواسطة: ${interaction.user.tag} (${interaction.user.id})\n`;
+        transcript += `========================================\n\n`;
+
+        for (const msg of sorted) {
+            const time = msg.createdAt.toLocaleString('ar-EG');
+            const author = `${msg.author.tag} (${msg.author.id})`;
+            const content = msg.content || '[مرفق / إيمبد / بدون نص]';
+            transcript += `[${time}] ${author}:\n${content}\n\n`;
         }
 
-    } catch (err) {
-        console.error('[INTERACTION ERROR]', err);
-    }
-});
+        // إنشاء الملف
+        const buffer = Buffer.from(transcript, 'utf-8');
+        const attachment = new AttachmentBuilder(buffer, { 
+            name: `transcript-${interaction.channel.name}.txt` 
+        });
 
-client.login(process.env.TOKEN);
+        // إرسال اللوق مع الملف
+        const logChannel = interaction.guild.channels.cache.get(config.LOG_CHANNEL_ID);
+        if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+                .setTitle('🗑️ تذكرة محذوفة + Transcript')
+                .setDescription(`تم حذف الروم: **${interaction.channel.name}**\nبواسطة: ${interaction.user}`)
+                .addFields(
+                    { name: '📅 وقت الحذف', value: `<t:${Math.floor(Date.now() / 1000)}:F>` },
+                    { name: '📄 عدد الرسائل', value: `${sorted.length} رسالة` }
+                )
+                .setColor('#DA373C')
+                .setTimestamp();
+
+            await logChannel.send({ 
+                embeds: [logEmbed], 
+                files: [attachment] 
+            });
+        }
+
+        // حذف الروم بعد ثانيتين
+        setTimeout(async () => {
+            try { 
+                await interaction.channel.delete(); 
+            } catch (err) { 
+                console.error('[DELETE ERROR]', err); 
+            }
+        }, 2000);
+
+    } catch (err) {
+        console.error('[TRANSCRIPT ERROR]', err);
+        await interaction.followUp({ content: '❌ حصل خطأ أثناء إنشاء الـ transcript، لكن التذكرة راح تنحذف.', ephemeral: true }).catch(() => {});
+        
+        setTimeout(async () => {
+            try { await interaction.channel.delete(); } 
+            catch (e) { console.error(e); }
+        }, 2000);
+    }
+    return;
+}
+
+client.login(process.env.TOKEN)
