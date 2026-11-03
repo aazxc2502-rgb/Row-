@@ -1,6 +1,17 @@
 const { 
-    ButtonStyle, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder
+    Client, 
+    GatewayIntentBits, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    PermissionFlagsBits, 
+    ModalBuilder, 
+    TextInputBuilder, 
+    TextInputStyle,
+    AttachmentBuilder
 } = require('discord.js');
+
 const config = require('./config');
 const ticket = require('./ticketSystem');
 
